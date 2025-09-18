@@ -1,0 +1,36 @@
+先embedding
+# MiniLM (快，512 维，多语言)
+python code/cluster_dialog.py --input Data/轮次分类CSV --embedding_model /Users/vince/.cache/huggingface/hub/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/c9745ed1d9f207416be6d2e6f8de32d1f16199bf --algorithm kmeans --n_clusters 4 --eval --visualize 差
+
+# MPNet (更强，768 维)
+python code/cluster_dialog.py --input Data/轮次分类CSV --embedding_model /Users/vince/.cache/huggingface/hub/models--sentence-transformers--all-mpnet-base-v2/snapshots/e8c3b32edf5434bc2275fc9bab85f82640a19130 --algorithm kmeans --n_clusters 4 --eval --visualize 差
+
+python code/cluster_dialog.py --input Data/轮次分类CSV --embedding_model /Users/vince/.cache/huggingface/hub/models--sentence-transformers--all-MiniLM-L12-v2/snapshots/c004d8e3e901237d8fa7e9fff12774962e391ce5 --algorithm kmeans --n_clusters 4 --eval --visualize
+
+# paraphrase-MiniLM (句子相似度优化)
+python code/cluster_dialog.py --input Data/轮次分类CSV --embedding_model /Users/vince/.cache/huggingface/hub/models--sentence-transformers--paraphrase-MiniLM-L6-v2/snapshots/c9a2bfebc254878aee8c3aca9e6844d5bbb102d1 --algorithm kmeans --n_clusters 4 --eval --visualize 好
+0.1315
+--embedding_mode
+full 0.2533 qa_turn 0.2820
+
+# UER 中文 NLI
+python code/cluster_dialog.py --input Data/轮次分类CSV --embedding_model /Users/vince/.cache/huggingface/hub/models--uer--sbert-base-chinese-nli/snapshots/2081897a182fdc33ea6e840f0eb38959b63ec0d3 --algorithm kmeans --n_clusters 4 --eval --visualize
+0.1160
+# Text2vec base
+python code/cluster_dialog.py --input Data/轮次分类CSV --embedding_model /Users/vince/.cache/huggingface/hub/models--shibing624--text2vec-base-chinese/snapshots/183bb99aa7af74355fb58d16edf8c13ae7c5433e --algorithm kmeans --n_clusters 4 --eval --visualize 次好
+0.1220
+# Text2vec sentence
+python code/cluster_dialog.py --input Data/轮次分类CSV --embedding_model /Users/vince/.cache/huggingface/hub/models--shibing624--text2vec-base-chinese-sentence/snapshots/01d763c526daa5fc95b2b590c201a4b22c57f9dd --algorithm kmeans --n_clusters 4 --eval --visualize
+0.0710
+# Text2vec large (效果更好，但显存占用大，实验先不用他)
+python code/cluster_dialog.py --input Data/轮次分类CSV --embedding_model /Users/vince/.cache/huggingface/hub/models--GanymedeNil--text2vec-large-chinese/snapshots/add4e02ec45da97442798f25093d9ab96e40c5ad --algorithm kmeans --n_clusters 4 --eval --visualize
+再聚类方法
+再簇数调优
+降维+可视化
+kmeans和pca比较适合
+dbscan
+
+还是先看鲁棒的kmeans和pca吧，轮廓系数貌似一点用都没有，我觉得可以试试qa_turn和full的聚类可视化效果，然后进行进一步的分析
+full的话n_clusters调成3或者4比较好
+qa_turn会糊在一块，还是full比较好
+最终确定，kmeans full 3
