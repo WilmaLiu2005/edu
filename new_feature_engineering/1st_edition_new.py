@@ -150,7 +150,7 @@ def extract_features(file_path, file_name):
         "avg_q_len": avg_q_len,
         "total_time": total_time,
         "non_class_ratio": non_class_ratio,
-        "total_assignments": total_assignments,
+        # "total_assignments": total_assignments,
         "days_to_next_deadline": days_to_next_deadline,  # 新特征名
     }
 
@@ -362,8 +362,8 @@ if df_features.empty:
     exit()
 
 # 显示特征统计信息
-feature_columns = ["qa_turns", "avg_q_len", "total_time", "non_class_ratio", "total_assignments", "days_to_next_deadline"]
-feature_names_cn = ["QA轮次", "平均问题长度", "总耗时(分钟)", "非班级入口比例", "作业考试总数", "距下次作业截止(天)"]
+feature_columns = ["qa_turns", "avg_q_len", "total_time", "non_class_ratio",  "days_to_next_deadline"]
+feature_names_cn = ["QA轮次", "平均问题长度", "总耗时(分钟)", "非班级入口比例",  "距下次作业截止(天)"]
 
 print(f"\n特征统计信息 (共 {len(df_features)} 个对话):")
 print(df_features[feature_columns].describe())
