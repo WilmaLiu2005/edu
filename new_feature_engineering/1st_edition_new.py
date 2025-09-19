@@ -7,11 +7,25 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import silhouette_score
 from sklearn.decomposition import PCA
 from sklearn.feature_selection import mutual_info_regression
-import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 from datetime import datetime
+import matplotlib.pyplot as plt
+import matplotlib
+import numpy as np
 
+# 设置matplotlib支持中文显示
+plt.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'SimHei', 'DejaVu Sans']  # 支持中文字体
+plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+
+# 如果是macOS，优先使用系统字体
+import platform
+if platform.system() == 'Darwin':  # macOS
+    plt.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'Heiti TC', 'STHeiti']
+elif platform.system() == 'Windows':
+    plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei']
+else:  # Linux
+    plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'WenQuanYi Micro Hei']
 # -----------------------------
 # 命令行参数
 # -----------------------------
@@ -87,26 +101,47 @@ def extract_features(file_path, file_name):
             exam_count = class_info["布置考试个数"].iloc[0] if "布置考试个数" in class_info.columns else 0
             total_assignments = homework_count + exam_count
     
-    # 新特征2：对话中每轮QA与最接近的作业的平均间隔时间
-    avg_homework_interval = 0
+    # 新特征2：距离下一次作业截止的时间（天数）
+    days_to_next_deadline = float('inf')  # 默认值：无穷大（表示没有即将到来的作业）
+    
     if not df_homework.empty:
         # 筛选该班级的作业/考试
         class_homework = df_homework[df_homework["教学班ID"] == class_id]
         
-        if not class_homework.empty and '发布时间' in class_homework.columns:
-            # 获取有效的发布时间
-            homework_times = class_homework['发布时间'].dropna()
+        if not class_homework.empty and '提交截止时间' in class_homework.columns:
+            # 获取有效的截止时间
+            deadline_times = pd.to_datetime(class_homework['提交截止时间'], errors='coerce').dropna()
             
-            if not homework_times.empty:
-                intervals = []
-                for qa_time in df["提问时间"]:
-                    # 计算与所有作业发布时间的间隔，取最小值
-                    time_diffs = abs(homework_times - qa_time).dt.total_seconds() / (24 * 3600)  # 转换为天
-                    if not time_diffs.empty:
-                        intervals.append(time_diffs.min())
+            if not deadline_times.empty:
+                # 计算对话期间距离下一次作业截止的最短时间
+                min_days_to_deadline = []
                 
-                if intervals:
-                    avg_homework_interval = np.mean(intervals)
+                for qa_time in df["提问时间"]:
+                    # 找到在对话时间之后的所有截止时间
+                    future_deadlines = deadline_times[deadline_times > qa_time]
+                    
+                    if not future_deadlines.empty:
+                        # 找到最近的一个截止时间
+                        next_deadline = future_deadlines.min()
+                        days_diff = (next_deadline - qa_time).total_seconds() / (24 * 3600)
+                        min_days_to_deadline.append(days_diff)
+                    else:
+                        # 如果没有未来的截止时间，查看是否有刚过期的（可能还在延期内）
+                        recent_deadlines = deadline_times[deadline_times <= qa_time]
+                        if not recent_deadlines.empty:
+                            latest_deadline = recent_deadlines.max()
+                            days_diff = (qa_time - latest_deadline).total_seconds() / (24 * 3600)
+                            # 如果刚过期不久（比如3天内），用负数表示
+                            if days_diff <= 3:
+                                min_days_to_deadline.append(-days_diff)
+                
+                if min_days_to_deadline:
+                    days_to_next_deadline = np.mean(min_days_to_deadline)
+                    print(f"文件 {file_name}, 班级 {class_id}: 平均距离下次作业截止 {days_to_next_deadline:.2f} 天")
+    
+    # 如果距离太远（比如超过30天），可能数据有问题，设为一个合理的上限
+    if days_to_next_deadline == float('inf') or days_to_next_deadline > 30:
+        days_to_next_deadline = 30  # 或者设为 NaN
     
     return {
         "file": file_name,
@@ -116,7 +151,7 @@ def extract_features(file_path, file_name):
         "total_time": total_time,
         "non_class_ratio": non_class_ratio,
         "total_assignments": total_assignments,
-        "avg_homework_interval": avg_homework_interval,
+        "days_to_next_deadline": days_to_next_deadline,  # 新特征名
     }
 
 # -----------------------------
@@ -264,10 +299,10 @@ def plot_feature_importance(importance_ranking, algorithm, n_clusters):
     feature_names = [item[0] for item in importance_ranking]
     comprehensive_scores = [item[1] for item in importance_ranking]
     
-    plt.figure(figsize=(12, 8))
+    plt.figure(figsize=(15, 10))
     
     # 主图：综合重要性分数
-    plt.subplot(2, 2, 1)
+    plt.subplot(2, 3, 1)  # 改为2x3布局
     bars = plt.bar(range(len(feature_names)), comprehensive_scores, color='skyblue', alpha=0.7)
     plt.title('特征重要性综合排名')
     plt.xlabel('特征')
@@ -285,7 +320,7 @@ def plot_feature_importance(importance_ranking, algorithm, n_clusters):
     score_indices = [2, 3, 4, 5]  # 对应importance_ranking中的索引
     
     for idx, (method, score_idx) in enumerate(zip(methods, score_indices)):
-        plt.subplot(2, 2, idx + 2)
+        plt.subplot(2, 3, idx + 2)  # 现在idx + 2的范围是2-5，都在1-6范围内
         scores = [item[score_idx] for item in importance_ranking]
         plt.bar(range(len(feature_names)), scores, alpha=0.7)
         plt.title(f'{method}重要性')
@@ -327,20 +362,37 @@ if df_features.empty:
     exit()
 
 # 显示特征统计信息
-feature_columns = ["qa_turns", "avg_q_len", "total_time", "non_class_ratio", "total_assignments", "avg_homework_interval"]
-feature_names_cn = ["QA轮次", "平均问题长度", "总耗时(分钟)", "非班级入口比例", "作业考试总数", "平均作业间隔(天)"]
+feature_columns = ["qa_turns", "avg_q_len", "total_time", "non_class_ratio", "total_assignments", "days_to_next_deadline"]
+feature_names_cn = ["QA轮次", "平均问题长度", "总耗时(分钟)", "非班级入口比例", "作业考试总数", "距下次作业截止(天)"]
 
 print(f"\n特征统计信息 (共 {len(df_features)} 个对话):")
 print(df_features[feature_columns].describe())
 
 # -----------------------------
-# 特征矩阵
+# 特征矩阵 (修复版本)
 # -----------------------------
 X = df_features[feature_columns].values
-X = np.nan_to_num(X, nan=0.0)
+
+# 更彻底地处理异常值
+X = np.nan_to_num(X, nan=0.0, posinf=30.0, neginf=-30.0)
+
+# 检查是否还有异常值
+print(f"数据中是否还有NaN: {np.isnan(X).any()}")
+print(f"数据中是否还有无穷值: {np.isinf(X).any()}")
+
+# 如果还有问题，进一步清理
+finite_mask = np.isfinite(X).all(axis=1)
+if not finite_mask.all():
+    print(f"发现 {(~finite_mask).sum()} 行数据有异常值，已移除")
+    X = X[finite_mask]
+    df_features = df_features[finite_mask].reset_index(drop=True)
 
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
+
+# 再次检查标准化后的数据
+print(f"标准化后数据形状: {X_scaled.shape}")
+print(f"标准化后是否有异常值: {np.isnan(X_scaled).any() or np.isinf(X_scaled).any()}")
 
 # -----------------------------
 # 聚类
@@ -415,7 +467,7 @@ if args.visualize:
     plt.ylabel("PCA Component 2")
     plt.colorbar(scatter)
     
-    fig_path = f"feature_cluster_visualization_{args.algorithm}_{args.n_clusters}.png"
+    fig_path = f"/Users/vince/undergraduate/KEG/edu/1st_edition_cluster_Figure_1_{args.n_clusters}.png"
     plt.savefig(fig_path, dpi=300, bbox_inches='tight')
     print(f"聚类可视化已保存到 {fig_path}")
     
